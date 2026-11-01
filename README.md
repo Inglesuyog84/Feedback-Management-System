@@ -1,38 +1,69 @@
 # Feedback Management System
 
-Full-stack mini project: Admin builds feedback forms, users submit feedback, admin views responses and a chart summary.
-
-## Run
-```bash
-npm install
-npm start
-# open http://localhost:3000
-```
-Default admin: `admin@example.com` / `admin123` (seeded on first run). Users register themselves from the login page.
-
-## Password reset email
-The login page includes **Forgot password?**. Configure SMTP before using it:
-
-```powershell
-$env:SMTP_HOST = "smtp.example.com"
-$env:SMTP_PORT = "587"
-$env:SMTP_USER = "your-email@example.com"
-$env:SMTP_PASS = "your-smtp-password-or-app-password"
-$env:MAIL_FROM = "your-email@example.com"
-$env:APP_BASE_URL = "http://localhost:3000"
-npm start
-```
-
-Use an app password when your email provider requires two-factor authentication. Reset links expire after 10 minutes and can only be used once. Never commit SMTP credentials to source control.
-
-Reset emails display the sender name **Feedback Management System**. Gmail may still show the authenticated `SMTP_USER` address in sender details because Gmail does not allow an SMTP client to spoof a different Gmail address.
-
-## Structure
-- `server.js` - Express REST API (auth, forms, questions, responses, summary)
-- `db.js` - SQLite schema + admin seed (creates `feedback.db`)
-- `public/` - frontend: `index.html` (login/register), `admin.html`, `user.html`, `app.js` (helpers), `style.css`
-- `PRD.md` - requirements document
+A full-stack web-based Feedback Management System developed using HTML, CSS, JavaScript, Node.js, Express.js and SQLite.
 
 ## Features
-- Admin: CRUD for forms and questions (rating 1-5, multiple choice, text), view/delete responses, summary with Chart.js
-- User: register/login, fill active forms (once per form), view own submissions
+
+### Admin
+- Create, view, update and delete feedback forms.
+- Manage feedback questions.
+- Support rating, multiple-choice and text questions.
+- View and delete submitted responses.
+- View feedback summaries and charts.
+
+### User
+- Register and log in.
+- View active feedback forms.
+- Submit feedback.
+- View personal submission history.
+- Submit feedback only once per form.
+
+## Installation and Setup
+
+1. Clone or download the repository.
+2. Install dependencies:
+
+```bash
+npm install
+```
+
+3. Start the application:
+
+```bash
+npm start
+```
+
+4. Open your browser:
+
+http://localhost:3000
+
+## Technologies Used
+
+- Frontend: HTML5, CSS3, JavaScript
+- Backend: Node.js, Express.js
+- Database: SQLite
+- Authentication: bcryptjs and JSON Web Token
+- Charts: Chart.js
+
+## Project Structure
+
+- `server.js` – Express backend and REST APIs
+- `db.js` – SQLite database configuration
+- `index.html` – Login and registration
+- `admin.html` – Admin dashboard
+- `user.html` – User dashboard
+- `app.js` – Frontend JavaScript
+- `style.css` – Application styling
+- `PRD.md` – Project requirements
+
+## Password Reset
+
+Password reset email functionality requires SMTP configuration. Set the required environment variables in your `.env` file. Never upload SMTP credentials or secrets to GitHub.
+
+## Developer
+
+Suyog Bhaskar Ingle
+
+## License
+
+This project is developed for academic purposes.
