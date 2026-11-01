@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Feedback - Admin</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+</head>
+<body>
+<header><div class="brand"><span class="brand-mark">F</span><h1>Feedback Management System</h1></div><div class="header-actions"><button id="themeToggle" class="theme-toggle" type="button"></button><div class="who" id="who"></div></div></header>
+<main>
+  <div class="page-intro"><h1>Admin Dashboard</h1><p>Create feedback forms, manage questions, and review submitted responses.</p></div>
+  <div class="tabs admin-tabs">
+    <button id="adminDashboardTab" class="active" onclick="loadDashboard()">Dashboard</button>
+    <button id="adminFormsTab" onclick="loadForms()">Feedback Forms</button>
+    <button id="adminResponsesTab" onclick="loadResponsesIndex()">Responses</button>
+  </div>
+  <div id="msg"></div>
+  <div id="content"></div>
+</main>
+<script src="app.js"></script>
+<script>
+  requireRole('admin');
+  const content = document.getElementById('content'), msg = document.getElementById('msg');
+  let charts = [];
+
+  function setAdminTab(active) {
+    ['Dashboard', 'Forms', 'Responses'].forEach(name => {
+      document.getElementById('admin' + name + 'Tab').classList.toggle('active', name === active);
+    });
+  }
+
+  async function loadDashboard() {
+    flash(msg, '');
+    setAdminTab('Dashboard');
+    try {
+      const [stats, forms] = await Promise.all([api('/admin/stats'), api('/forms')]);
+      content.innerHTML = `
+        <div class="admin-stats">
+          <div class="stat-card"><span class="stat-icon">F</span><div class="muted">Total feedback forms</div><strong>${stats.forms}</strong></div>
+          <div class="stat-card"><span class="stat-icon">✓</span><div class="muted">Active forms</div><strong>${stats.activeForms}</strong></div>
+          <div class="stat-card"><span class="stat-icon">U</span><div class="muted">Registered users</div><strong>${stats.users}</strong></div>
+          <div class="stat-card"><span class="stat-icon">R</span><div class="muted">Responses received</div><strong>${stats.responses}</strong></div>
+        </div>
+        <div class="card overview-card">
+          <div class="row spread"><h2>Feedback forms overview</h2><button class="small" onclick="loadForms()">Create / manage forms</button></div>
+          <div class="overview-list">
+            ${forms.length ? forms.map(f => `
+              <div class="overview-item">
+                <div>
+                  <h3>${esc(f.title)}</h3>
+                  <div class="muted">${f.question_count} questions &middot; ${f.response_count} responses</div>
+                </div>
+                <span class="badge ${f.is_active ? 'done' : ''}">${f.is_active ? 'Active' : 'Draft'}</span>
+                <div class="row">
+                  <button class="small secondary" onclick="editForm(${f.id})">Manage questions</button>
+                  <button class="small secondary" onclick="showSummary(${f.id})">View summary</button>
+                </div>
+              </div>`).join('') : '<p class="muted">No forms yet. Create one to get started.</p>'}
+          </div>
+        </div>`;
+    } catch (e) { flash(msg, e.message); }
+  }
+
+  // ---------------- Forms list ----------------
+  async function loadForms() {
+    flash(msg, '');
+    setAdminTab('Forms');
+    try {
+      const forms = await api('/forms');
+      content.innerHTML = `
+        <div class="card">
+          <h2>Create a form</h2>
+          <form id="newForm">
+            <label>Title</label><input type="text" id="nTitle" required>
+            <label>Description</label><textarea id="nDesc"></textarea>
+            <p><button type="submit">Create form</button></p>
+          </form>
+        </div>
+        <h2>All forms</h2>
+        ${forms.length ? forms.map(f => `
+          <div class="card summary-card">
+            <div class="row spread">
+              <div>
+                <h3 style="margin:0 0 4px">${esc(f.title)}
+                  <span class="badge ${f.is_active ? '' : 'off'}">${f.is_active ? 'Active' : 'Inactive'}</span></h3>
+                <div class="muted">${esc(f.description)}</div>
+                <div class="muted">${f.question_count} question(s) &middot; ${f.response_count} response(s)</div>
+              </div>
+              <div class="row">
+                <button class="small" onclick="editForm(${f.id})">Edit / Questions</button>
+                <button class="small secondary" onclick="showResponses(${f.id})">Responses</button>
+                <button class="small secondary" onclick="showSummary(${f.id})">Summary</button>
+                <button class="small danger" onclick="delForm(${f.id})">Delete</button>
+              </div>
+            </div>
+          </div>`).join('') : '<div class="card muted">No forms yet. Create one above.</div>'}`;
+      document.getElementById('newForm').addEventListener('submit', async e => {
+        e.preventDefault();
+        try {
+          const r = await api('/forms', 'POST', { title: nTitle.value, description: nDesc.value });
+          editForm(r.id);
+        } catch (err) { flash(msg, err.message); }
+      });
+    } catch (e) { flash(msg, e.message); }
+  }
+
+  async function loadResponsesIndex() {
+    flash(msg, '');
+    setAdminTab('Responses');
+    try {
+      const forms = await api('/forms');
+      content.innerHTML = `
+        <div class="card">
+          <h2>Responses</h2>
+          <div class="overview-list">
+            ${forms.length ? forms.map(f => `
+              <div class="overview-item">
+                <div><h3>${esc(f.title)}</h3><div class="muted">${f.response_count} responses received</div></div>
+                <button class="small" onclick="showResponses(${f.id})">View responses</button>
+              </div>`).join('') : '<p class="muted">No forms available.</p>'}
+          </div>
+        </div>`;
+    } catch (e) { flash(msg, e.message); }
+  }
+
+  async function delForm(id) {
+    if (!confirm('Delete this form with all its questions and responses?')) return;
+    try { await api('/forms/' + id, 'DELETE'); loadForms(); } catch (e) { flash(msg, e.message); }
+  }
+
+  // ---------------- Edit form + questions ----------------
+  async function editForm(id, editQ) {
+    flash(msg, '');
+    try {
+      const f = await api('/forms/' + id);
+      const q = editQ ? f.questions.find(x => x.id === editQ) : null;
+      content.innerHTML = `
+        <p><button class="secondary small" onclick="loadForms()">&larr; Back to forms</button></p>
+        <div class="card">
+          <h2>Edit form</h2>
+          <form id="editForm">
+            <label>Title</label><input type="text" id="eTitle" value="${esc(f.title)}" required>
+            <label>Description</label><textarea id="eDesc">${esc(f.description)}</textarea>
+            <label><input type="checkbox" id="eActive" ${f.is_active ? 'checked' : ''}> Active (visible to users)</label>
+            <p><button type="submit">Save form</button></p>
+          </form>
+        </div>
+
+        <div class="card">
+          <h2>Questions</h2>
+          ${f.questions.length ? f.questions.map((x, i) => `
+            <div class="q-item row spread">
+              <div>
+                <strong>${i + 1}. ${esc(x.text)}</strong>
+                <div class="muted">${{ rating: 'Rating (1-5)', choice: 'Multiple choice: ' + esc(x.options.join(', ')), text: 'Text' }[x.type]}
+                  ${x.required ? '&middot; required' : '&middot; optional'}</div>
+              </div>
+              <div class="row">
+                <button class="small secondary" onclick="editForm(${id}, ${x.id})">Edit</button>
+                <button class="small danger" onclick="delQuestion(${id}, ${x.id})">Delete</button>
+              </div>
+            </div>`).join('') : '<p class="muted">No questions yet.</p>'}
+
+          <h3>${q ? 'Edit question' : 'Add a question'}</h3>
+          <form id="qForm">
+            <label>Question text</label><input type="text" id="qText" value="${q ? esc(q.text) : ''}" required>
+            <label>Type</label>
+            <select id="qType" onchange="toggleOpts()">
+              <option value="rating" ${q?.type === 'rating' ? 'selected' : ''}>Rating (1-5)</option>
+              <option value="choice" ${q?.type === 'choice' ? 'selected' : ''}>Multiple choice</option>
+              <option value="text" ${q?.type === 'text' ? 'selected' : ''}>Text</option>
+            </select>
+            <div id="optsBox" class="hidden">
+              <label>Options (one per line, at least 2)</label>
+              <textarea id="qOpts">${q ? esc(q.options.join('\n')) : ''}</textarea>
+            </div>
+            <label><input type="checkbox" id="qReq" ${!q || q.required ? 'checked' : ''}> Required</label>
+            <p class="row"><button type="submit">${q ? 'Update question' : 'Add question'}</button>
+              ${q ? `<button type="button" class="secondary" onclick="editForm(${id})">Cancel</button>` : ''}</p>
+          </form>
+        </div>`;
+      toggleOpts();
+
+      document.getElementById('editForm').addEventListener('submit', async e => {
+        e.preventDefault();
+        try {
+          await api('/forms/' + id, 'PUT', { title: eTitle.value, description: eDesc.value, is_active: eActive.checked });
+          flash(msg, 'Form saved.', 'ok');
+        } catch (err) { flash(msg, err.message); }
+      });
+      document.getElementById('qForm').addEventListener('submit', async e => {
+        e.preventDefault();
+        const body = {
+          text: qText.value, type: qType.value, required: qReq.checked,
+          options: qOpts.value.split('\n').map(s => s.trim()).filter(Boolean)
+        };
+        try {
+          q ? await api('/questions/' + q.id, 'PUT', body) : await api(`/forms/${id}/questions`, 'POST', body);
+          await editForm(id); flash(msg, q ? 'Question updated.' : 'Question added.', 'ok');
+        } catch (err) { flash(msg, err.message); }
+      });
+    } catch (e) { flash(msg, e.message); }
+  }
+
+  function toggleOpts() { document.getElementById('optsBox').classList.toggle('hidden', qType.value !== 'choice'); }
+
+  async function delQuestion(formId, qid) {
+    if (!confirm('Delete this question (and its answers)?')) return;
+    try { await api('/questions/' + qid, 'DELETE'); editForm(formId); } catch (e) { flash(msg, e.message); }
+  }
+
+  // ---------------- Responses ----------------
+  async function showResponses(id) {
+    flash(msg, '');
+    try {
+      const [f, r] = await Promise.all([api('/forms/' + id), api(`/forms/${id}/responses`)]);
+      content.innerHTML = `
+        <p class="row"><button class="secondary small" onclick="loadForms()">&larr; Back to forms</button>
+          <button class="small" onclick="showSummary(${id})">View summary</button></p>
+        <div class="card" style="overflow-x:auto">
+          <h2>Responses: ${esc(f.title)}</h2>
+          ${r.responses.length ? `<table>
+            <tr><th>User</th><th>Date</th>${r.questions.map(q => `<th>${esc(q.text)}</th>`).join('')}<th></th></tr>
+            ${r.responses.map(x => `<tr>
+              <td>${esc([x.name, x.surname].filter(Boolean).join(' '))}<br><span class="muted">${esc(x.email)}</span></td>
+              <td>${fmtDate(x.submitted_at)}</td>
+              ${r.questions.map(q => `<td>${esc(x.answers[q.id] ?? '-')}</td>`).join('')}
+              <td><button class="small danger" onclick="delResponse(${id}, ${x.id})">Delete</button></td>
+            </tr>`).join('')}</table>` : '<p class="muted">No responses yet.</p>'}
+        </div>`;
+    } catch (e) { flash(msg, e.message); }
+  }
+
+  async function delResponse(formId, rid) {
+    if (!confirm('Delete this response?')) return;
+    try { await api('/responses/' + rid, 'DELETE'); showResponses(formId); } catch (e) { flash(msg, e.message); }
+  }
+
+  // ---------------- Summary ----------------
+  async function showSummary(id) {
+    flash(msg, '');
+    charts.forEach(c => c.destroy()); charts = [];
+    try {
+      const s = await api(`/forms/${id}/summary`);
+      content.innerHTML = `
+        <p class="row"><button class="secondary small" onclick="loadForms()">&larr; Back to forms</button>
+          <button class="small secondary" onclick="showResponses(${id})">View responses</button></p>
+        <div class="card"><h2>Summary: ${esc(s.form.title)}</h2>
+          <div class="muted">Total responses</div><div class="stat">${s.total}</div></div>
+        ${s.summary.map(q => `
+          <div class="card">
+            <h3>${esc(q.text)}</h3>
+            <div class="muted">${q.answered} answer(s)</div>
+            ${q.type === 'rating' ? `<div class="muted">Average rating</div><div class="stat">${q.average} / 5</div>
+              <div class="chart-box"><canvas id="c${q.id}"></canvas></div>` : ''}
+            ${q.type === 'choice' ? `<div class="chart-box"><canvas id="c${q.id}"></canvas></div>` : ''}
+            ${q.type === 'text' ? (q.texts.length ? `<ul>${q.texts.map(t => `<li>${esc(t)}</li>`).join('')}</ul>`
+              : '<p class="muted">No text answers.</p>') : ''}
+          </div>`).join('')}`;
+
+      s.summary.forEach(q => {
+        if (q.type === 'text') return;
+        const labels = Object.keys(q.counts), data = Object.values(q.counts);
+        const styles = getComputedStyle(document.documentElement);
+        const textColor = styles.getPropertyValue('--muted').trim();
+        const borderColor = styles.getPropertyValue('--border').trim();
+        charts.push(new Chart(document.getElementById('c' + q.id), {
+          type: q.type === 'choice' ? 'pie' : 'bar',
+          data: { labels: q.type === 'rating' ? labels.map(l => l + ' star') : labels,
+                  datasets: [{ label: 'Responses', data,
+                    backgroundColor: ['#4f46e5', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'],
+                    borderColor: q.type === 'choice' ? styles.getPropertyValue('--card').trim() : '#4f46e5',
+                    borderWidth: q.type === 'choice' ? 2 : 0,
+                    borderRadius: q.type === 'rating' ? 6 : 0,
+                    maxBarThickness: 54 }] },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: {
+              legend: { display: q.type === 'choice', position: 'bottom',
+                labels: { color: textColor, padding: 16, usePointStyle: true, boxWidth: 10 } },
+              tooltip: { callbacks: { label: context => ` ${context.label}: ${context.raw}` } }
+            },
+            scales: q.type === 'rating' ? {
+              x: { ticks: { color: textColor }, grid: { color: borderColor } },
+              y: { beginAtZero: true, ticks: { precision: 0, color: textColor }, grid: { color: borderColor } }
+            } : {}
+          }
+        }));
+      });
+    } catch (e) { flash(msg, e.message); }
+  }
+
+  loadDashboard();
+</script>
+</body>
+</html>

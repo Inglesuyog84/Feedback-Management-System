@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Feedback Management System</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="auth-page">
+<header><div class="brand"><span class="brand-mark">F</span><h1>Feedback Management System</h1></div><button id="themeToggle" class="theme-toggle" type="button"></button></header>
+<main style="max-width:640px">
+  <div class="card auth-card">
+    <div class="brand-mark">F</div>
+    <h2>Welcome back</h2>
+    <p class="muted">Sign in to access your feedback dashboard.</p>
+    <div id="msg"></div>
+
+    <form id="login">
+      <label>Email</label><input type="email" id="lEmail" required>
+      <label>Password</label>
+      <div class="password-field">
+        <input type="password" id="lPass" required>
+        <button type="button" class="password-toggle" data-password-toggle="lPass" aria-label="Show password">Show</button>
+      </div>
+      <p><button type="submit">Login</button></p>
+      <p class="auth-links"><a href="/forgot-password.html">Forgot password?</a><span>New user? <a href="#" onclick="show('register'); return false;">Register here</a></span></p>
+    </form>
+
+    <form id="register" class="hidden">
+      <button type="button" class="secondary small" onclick="show('login')">&larr; Back to login</button>
+      <label>Name</label><input type="text" id="rName" required>
+      <label>Surname</label><input type="text" id="rSurname" required>
+      <label>Email</label><input type="email" id="rEmail" required>
+      <label>Password</label>
+      <div class="password-field">
+        <input type="password" id="rPass" minlength="6" required>
+        <button type="button" class="password-toggle" data-password-toggle="rPass" aria-label="Show password">Show</button>
+      </div>
+      <div class="password-strength" data-password-strength="rPass" aria-live="polite"></div>
+      <p><button type="submit">Create account</button></p>
+    </form>
+  </div>
+</main>
+<script src="app.js"></script>
+<script>
+  if (Auth.token && Auth.user) location.href = Auth.user.role === 'admin' ? '/admin.html' : '/user.html';
+  const msg = document.getElementById('msg');
+  function show(which) {
+    document.getElementById('login').classList.toggle('hidden', which !== 'login');
+    document.getElementById('register').classList.toggle('hidden', which !== 'register');
+    flash(msg, '');
+  }
+  document.getElementById('login').addEventListener('submit', async e => {
+    e.preventDefault();
+    try {
+      const r = await api('/auth/login', 'POST', { email: lEmail.value, password: lPass.value });
+      Auth.save(r.token, r.user);
+      location.href = r.user.role === 'admin' ? '/admin.html' : '/user.html';
+    } catch (err) { flash(msg, err.message); }
+  });
+  document.getElementById('register').addEventListener('submit', async e => {
+    e.preventDefault();
+    try {
+      await api('/auth/register', 'POST', { name: rName.value, surname: rSurname.value, email: rEmail.value, password: rPass.value });
+      show('login'); lEmail.value = rEmail.value; flash(msg, 'Registered! Please log in.', 'ok');
+    } catch (err) { flash(msg, err.message); }
+  });
+</script>
+</body>
+</html>

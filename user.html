@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Feedback - User</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header><div class="brand"><span class="brand-mark">F</span><h1>Feedback Management System</h1></div><div class="header-actions"><button id="themeToggle" class="theme-toggle" type="button"></button><div class="who" id="who"></div></div></header>
+<main>
+  <div class="page-intro"><h1>User Dashboard</h1><p id="welcomeText">Select a feedback form or review your previous submissions.</p></div>
+  <div class="tabs">
+    <button id="tForms" class="active" onclick="view('forms')">Available forms</button>
+    <button id="tMine" onclick="view('mine')">My submissions</button>
+  </div>
+  <div id="msg"></div>
+  <div id="content"></div>
+</main>
+<script src="app.js"></script>
+<script>
+  const currentUser = requireRole('user');
+  if (currentUser) document.getElementById('welcomeText').textContent =
+    `Welcome, ${[currentUser.name, currentUser.surname].filter(Boolean).join(' ')}. Select a feedback form or review your previous submissions.`;
+  const content = document.getElementById('content'), msg = document.getElementById('msg');
+
+  function view(which) {
+    document.getElementById('tForms').classList.toggle('active', which === 'forms');
+    document.getElementById('tMine').classList.toggle('active', which === 'mine');
+    flash(msg, '');
+    which === 'forms' ? loadForms() : loadMine();
+  }
+
+  async function loadForms() {
+    try {
+      const forms = await api('/forms');
+      content.innerHTML = forms.length ? forms.map(f => `
+        <div class="card row spread">
+          <div>
+            <h3 style="margin:0 0 4px">${esc(f.title)}</h3>
+            <div class="muted">${esc(f.description)}</div>
+            <div class="muted">${f.question_count} question(s)</div>
+          </div>
+          ${f.submitted ? '<span class="badge done">Submitted</span>'
+            : `<button onclick="openForm(${f.id})" ${f.question_count ? '' : 'disabled'}>Give feedback</button>`}
+        </div>`).join('') : '<div class="card muted">No feedback forms are available right now.</div>';
+    } catch (e) { flash(msg, e.message); }
+  }
+
+  async function openForm(id) {
+    try {
+      const f = await api('/forms/' + id);
+      content.innerHTML = `
+        <div class="card">
+          <h2>${esc(f.title)}</h2><p class="muted">${esc(f.description)}</p>
+          <form id="fb">
+            ${f.questions.map((q, i) => `
+              <div class="q-item">
+                <strong>${i + 1}. ${esc(q.text)}</strong>${q.required ? ' <span style="color:var(--danger)">*</span>' : ''}
+                ${q.type === 'rating' ? `<div class="rating">${[1,2,3,4,5].map(n =>
+                  `<label><input type="radio" name="q${q.id}" value="${n}"> ${n}</label>`).join('')}</div>
+                  <div class="muted">1 = Poor, 5 = Excellent</div>` : ''}
+                ${q.type === 'choice' ? `<div class="choice">${q.options.map(o =>
+                  `<label><input type="radio" name="q${q.id}" value="${esc(o)}"> ${esc(o)}</label>`).join('')}</div>` : ''}
+                ${q.type === 'text' ? `<textarea name="q${q.id}"></textarea>` : ''}
+              </div>`).join('')}
+            <div class="row"><button type="submit">Submit feedback</button>
+            <button type="button" class="secondary" onclick="view('forms')">Cancel</button></div>
+          </form>
+        </div>`;
+      document.getElementById('fb').addEventListener('submit', async e => {
+        e.preventDefault();
+        const answers = {};
+        f.questions.forEach(q => {
+          if (q.type === 'text') answers[q.id] = e.target.elements['q' + q.id].value;
+          else { const c = e.target.querySelector(`input[name=q${q.id}]:checked`); if (c) answers[q.id] = c.value; }
+        });
+        try {
+          await api(`/forms/${id}/responses`, 'POST', { answers });
+          view('forms'); flash(msg, 'Thank you! Your feedback was submitted.', 'ok');
+        } catch (err) { flash(msg, err.message); window.scrollTo(0, 0); }
+      });
+    } catch (e) { flash(msg, e.message); }
+  }
+
+  async function loadMine() {
+    try {
+      const rows = await api('/my/responses');
+      content.innerHTML = `<div class="card">${rows.length ? `<table>
+        <tr><th>Form</th><th>Submitted on</th></tr>
+        ${rows.map(r => `<tr><td>${esc(r.title)}</td><td>${fmtDate(r.submitted_at)}</td></tr>`).join('')}
+        </table>` : '<span class="muted">You have not submitted any feedback yet.</span>'}</div>`;
+    } catch (e) { flash(msg, e.message); }
+  }
+
+  loadForms();
+</script>
+</body>
+</html>
